@@ -1,0 +1,86 @@
+# Every value can be overridden without rebuilding the jar:
+#   - environment variable (e.g. CROSBATCH_INPUT_DIR=/data/cros/in)
+#   - command line        (e.g. --crosbatch.period=112025)
+#   - external file       (e.g. --spring.config.additional-location=/opt/crosbatch/application.yml)
+
+spring:
+  application:
+    name: crosbatch
+  main:
+    web-application-type: none
+    banner-mode: off
+  batch:
+    job:
+      # The job is launched by CrosbatchApplication (period handling, summary, exit code).
+      enabled: false
+    jdbc:
+      # Creates the Spring Batch tables (BATCH_JOB_INSTANCE, BATCH_STEP_EXECUTION, ...) if missing.
+      initialize-schema: ${CROSBATCH_BATCH_SCHEMA_INIT:always}
+  datasource:
+    url: ${CROSBATCH_DB_URL:jdbc:postgresql://localhost:5432/cros?reWriteBatchedInserts=true}
+    username: ${CROSBATCH_DB_USERNAME:cros}
+    password: ${CROSBATCH_DB_PASSWORD:}
+    hikari:
+      maximum-pool-size: ${CROSBATCH_DB_POOL_SIZE:5}
+  jpa:
+    open-in-view: false
+    hibernate:
+      # update = create/extend tables from the entities. Use "validate" once a DBA owns the schema.
+      ddl-auto: ${CROSBATCH_DDL_AUTO:update}
+    properties:
+      hibernate:
+        default_schema: ${CROSBATCH_DB_SCHEMA:public}
+        jdbc:
+          batch_size: ${crosbatch.batch-size}
+        order_inserts: true
+        order_updates: true
+
+crosbatch:
+  input-dir: ${CROSBATCH_INPUT_DIR:./data/input}
+  backup-dir: ${CROSBATCH_BACKUP_DIR:./data/backup}
+  # MMyyyy, e.g. 112025. Empty = previous month of the run date.
+  period: ${CROSBATCH_PERIOD:}
+  period-format: MMyyyy
+  file-name-pattern: "{prefix}_{period}.txt"
+  delimiter: "~|~"
+  charset: ${CROSBATCH_CHARSET:UTF-8}
+  date-pattern: dd-MM-yy
+  two-digit-year-base: 1950
+  batch-size: ${CROSBATCH_BATCH_SIZE:1000}
+  progress-log-interval: 100000
+  allow-empty-file: false
+  recover-stale-executions: false
+  backup-timestamp-pattern: yyyyMMddHHmmss
+  # Processing order. Set enabled: false to skip a file.
+  files:
+    - type: REGION_DIM
+      prefix: CROS_REGION_DIM
+    - type: BRANCH_DIM
+      prefix: CROS_BRANCH_DIM
+    - type: MASTER_DEBITUR
+      prefix: CROS_MASTER_DEBITUR
+    - type: MASTER_PINJAMAN
+      prefix: CROS_MASTER_PINJAMAN
+    - type: MASTER_KOMITMEN
+      prefix: CROS_MASTER_KOMITMEN
+    - type: JAMINAN_DEBITUR
+      prefix: CROS_JAMINAN_DEBITUR
+    - type: NPL
+      prefix: CROS_NPL
+    - type: PEMEGANG_SAHAM
+      prefix: CROS_PEMEGANG_SAHAM
+    - type: RELASI_JAMINAN_FASILITAS
+      prefix: CROS_RELASI_JAMINAN_FASILITAS
+
+logging:
+  file:
+    name: ${CROSBATCH_LOG_FILE:./logs/crosbatch.log}
+  logback:
+    rollingpolicy:
+      file-name-pattern: ${CROSBATCH_LOG_FILE:./logs/crosbatch.log}.%d{yyyy-MM-dd}.%i.gz
+      max-file-size: 50MB
+      max-history: ${CROSBATCH_LOG_MAX_HISTORY:90}
+  level:
+    root: INFO
+    id.co.bca.crosbatch: INFO
+    org.hibernate.engine.jdbc.batch: WARN

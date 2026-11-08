@@ -1,0 +1,48 @@
+# API mode: java -jar crosbatch.jar --spring.profiles.active=api
+# Starts a web server and runs the job only when POST /api/cros-batch/executions is called.
+
+spring:
+  main:
+    web-application-type: servlet
+
+server:
+  port: ${CROSBATCH_API_PORT:8080}
+  # Listen on localhost only by default; set CROSBATCH_API_ADDRESS=0.0.0.0 to accept remote calls.
+  address: ${CROSBATCH_API_ADDRESS:127.0.0.1}
+  shutdown: graceful
+
+# Swagger UI: /swagger-ui.html   OpenAPI JSON: /v3/api-docs
+# Set CROSBATCH_SWAGGER_ENABLED=false to switch both off (e.g. in production).
+springdoc:
+  api-docs:
+    enabled: ${CROSBATCH_SWAGGER_ENABLED:true}
+  swagger-ui:
+    enabled: ${CROSBATCH_SWAGGER_ENABLED:true}
+    path: /swagger-ui.html
+  paths-to-match: /api/**
+
+# Health: /actuator/health (overall), /actuator/health/liveness, /actuator/health/readiness
+# No API key needed, so load balancers and monitoring can call it.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-components: always
+      # never | always. "always" also shows folder paths, DB product and last run details.
+      show-details: ${CROSBATCH_HEALTH_SHOW_DETAILS:never}
+      group:
+        readiness:
+          include: readinessState, db, crosBatch
+
+crosbatch:
+  run-on-startup: false
+  api:
+    key-header: X-API-KEY
+    # Required. Callers send it in the X-API-KEY header.
+    key: ${CROSBATCH_API_KEY:}
+    max-list-size: 100
