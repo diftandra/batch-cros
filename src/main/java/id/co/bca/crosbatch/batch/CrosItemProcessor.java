@@ -11,6 +11,7 @@ import org.springframework.batch.core.step.StepExecution;
 import org.springframework.batch.infrastructure.item.ItemProcessor;
 
 import java.time.LocalDate;
+import java.time.YearMonth;
 
 /**
  * Converts a {@link Row} into its entity and stamps the period. Blank lines are filtered
@@ -23,6 +24,8 @@ public class CrosItemProcessor<E extends BaseCrosEntity> implements ItemProcesso
     private final CrosFileLocator locator;
     private LocalDate periode;
     private String fileName;
+    private Boolean hasTglData;
+    private Long jobExecutionId;
 
     public CrosItemProcessor(FileDefinition<E> definition, CrosBatchProperties.FileConfig fileConfig,
                              CrosFileLocator locator) {
@@ -36,6 +39,8 @@ public class CrosItemProcessor<E extends BaseCrosEntity> implements ItemProcesso
         String period = CrosFileLocator.period(stepExecution);
         this.periode = locator.periode(period);
         this.fileName = locator.fileName(fileConfig, period);
+        this.hasTglData = null;
+        this.jobExecutionId = stepExecution.getJobExecutionId();
     }
 
     @Override
@@ -49,9 +54,20 @@ public class CrosItemProcessor<E extends BaseCrosEntity> implements ItemProcesso
         } catch (RuntimeException e) {
             throw new FileParseException(fileName, row.getLineNumber(), e.getMessage(), e);
         }
+        if (hasTglData == null) {
+            hasTglData = row.has(PeriodDetector.TGL_DATA);
+        }
+        if (hasTglData) {
+            LocalDate tglData = row.date(PeriodDetector.TGL_DATA);
+            if (tglData == null || !YearMonth.from(tglData).equals(YearMonth.from(periode))) {
+                throw new FileParseException(fileName, row.getLineNumber(), "TGL_DATA " + tglData
+                        + " is not in the job period " + YearMonth.from(periode), null);
+            }
+        }
         entity.setPeriode(periode);
         if (entity instanceof ActiveCrosEntity active) {
             active.setActive(Boolean.TRUE);
+            active.setLoadExecutionId(jobExecutionId);
         }
         return entity;
     }

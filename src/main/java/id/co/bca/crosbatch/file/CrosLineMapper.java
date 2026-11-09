@@ -4,10 +4,8 @@ import org.springframework.batch.infrastructure.item.file.LineCallbackHandler;
 import org.springframework.batch.infrastructure.item.file.LineMapper;
 import org.springframework.batch.infrastructure.item.file.transform.DelimitedLineTokenizer;
 
-import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeFormatterBuilder;
-import java.time.temporal.ChronoField;
 import java.util.Arrays;
+import java.util.regex.Pattern;
 
 /**
  * Turns a line into a {@link Row}. Used by {@code FlatFileItemReader}: the header line (skipped
@@ -18,21 +16,21 @@ public class CrosLineMapper implements LineMapper<Row>, LineCallbackHandler {
 
     private final String delimiter;
     private final DelimitedLineTokenizer tokenizer;
-    private final DateTimeFormatter dateFormatter;
+    private final CrosDateParser dateParser;
 
-    public CrosLineMapper(String delimiter, String datePattern, int twoDigitYearBase) {
+    public CrosLineMapper(String delimiter, CrosDateParser dateParser) {
         this.delimiter = delimiter;
         this.tokenizer = new DelimitedLineTokenizer(delimiter);
         // The files have no quoting; free text may contain '"', so disable quote handling.
         this.tokenizer.setQuoteCharacter('\u0000');
         this.tokenizer.setStrict(true);
-        this.dateFormatter = buildDateFormatter(datePattern, twoDigitYearBase);
+        this.dateParser = dateParser;
     }
 
     /** Header line. */
     @Override
     public void handleLine(String header) {
-        String[] names = Arrays.stream(header.split(java.util.regex.Pattern.quote(delimiter), -1))
+        String[] names = Arrays.stream(header.split(Pattern.quote(delimiter), -1))
                 .map(n -> n.replace("\uFEFF", "").strip().toUpperCase())
                 .toArray(String[]::new);
         tokenizer.setNames(names);
@@ -46,23 +44,6 @@ public class CrosLineMapper implements LineMapper<Row>, LineCallbackHandler {
         if (!tokenizer.hasNames()) {
             throw new IllegalStateException("file has no header line");
         }
-        return new Row(tokenizer.tokenize(line), lineNumber, dateFormatter);
-    }
-
-    /** Builds a formatter where "yy" maps to the 100-year window starting at {@code base}. */
-    static DateTimeFormatter buildDateFormatter(String pattern, int base) {
-        int yy = pattern.indexOf("yy");
-        if (yy < 0 || pattern.contains("yyy")) {
-            return DateTimeFormatter.ofPattern(pattern);
-        }
-        DateTimeFormatterBuilder builder = new DateTimeFormatterBuilder();
-        if (yy > 0) {
-            builder.appendPattern(pattern.substring(0, yy));
-        }
-        builder.appendValueReduced(ChronoField.YEAR, 2, 2, base);
-        if (yy + 2 < pattern.length()) {
-            builder.appendPattern(pattern.substring(yy + 2));
-        }
-        return builder.toFormatter();
+        return new Row(tokenizer.tokenize(line), lineNumber, dateParser);
     }
 }

@@ -22,18 +22,23 @@ public class CrosFileDefinitions {
     private final Map<CrosFileType, FileDefinition<?>> definitions = new EnumMap<>(CrosFileType.class);
 
     public CrosFileDefinitions() {
+        // Composite keys. The original keys were extended after checking the 112025 files: without the
+        // extra columns, several real rows shared a key and only the last one was kept.
         definitions.put(CrosFileType.MASTER_DEBITUR, FileDefinition.upsert(MasterDebitur.class,
                 CrosFileDefinitions::masterDebitur,
-                e -> Arrays.asList(e.getCustLnCurrKey(), e.getKategoriDebitur(), e.getKodeKanwil(), e.getKodeKcu())));
+                e -> Arrays.asList(e.getCustLnCurrKey(), e.getKategoriDebitur(), e.getKodeKanwil(), e.getKodeKcu(),
+                        e.getKategoriKredit())));
         definitions.put(CrosFileType.MASTER_PINJAMAN, FileDefinition.upsert(MasterPinjaman.class,
                 CrosFileDefinitions::masterPinjaman,
-                e -> Arrays.asList(e.getCustLnCurrKey(), e.getKodeKanwil(), e.getKodeKcu())));
+                e -> Arrays.asList(e.getCustLnCurrKey(), e.getKodeKanwil(), e.getKodeKcu(),
+                        e.getNoRekeningPinjaman(), e.getNoPinjaman())));
         definitions.put(CrosFileType.MASTER_KOMITMEN, FileDefinition.upsert(MasterKomitmen.class,
                 CrosFileDefinitions::masterKomitmen,
-                e -> Arrays.asList(e.getCustLnCurrKey(), e.getKodeKanwil(), e.getKodeKcu())));
+                e -> Arrays.asList(e.getCustLnCurrKey(), e.getKodeKanwil(), e.getKodeKcu(),
+                        e.getNoRekeningPinjaman(), e.getNoKomitmen())));
         definitions.put(CrosFileType.JAMINAN_DEBITUR, FileDefinition.upsert(JaminanDebitur.class,
                 CrosFileDefinitions::jaminanDebitur,
-                e -> Arrays.asList(e.getCustLnCurrKey())));
+                e -> Arrays.asList(e.getCustLnCurrKey(), e.getCollCurrKey())));
         definitions.put(CrosFileType.NPL, FileDefinition.snapshot(Npl.class, CrosFileDefinitions::npl));
         definitions.put(CrosFileType.PEMEGANG_SAHAM,
                 FileDefinition.snapshot(PemegangSaham.class, CrosFileDefinitions::pemegangSaham));

@@ -36,3 +36,6 @@ build/
 ### VS Code ###
 .vscode/
 .crosbatch-api-key
+
+### macOS ###
+.DS_Store

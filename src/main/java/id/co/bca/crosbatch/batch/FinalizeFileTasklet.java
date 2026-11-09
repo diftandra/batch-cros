@@ -18,7 +18,7 @@ import java.time.LocalDateTime;
  * <ul>
  *   <li>Fails when the file had no data rows (unless allowed), so an empty UPSERT file cannot
  *       deactivate the whole table.</li>
- *   <li>UPSERT files: every active row whose period is not the current one (its key was not in
+ *   <li>UPSERT files: every active row not loaded by this job execution (its key was not in
  *       this file) is set to is_active = false.</li>
  * </ul>
  */
@@ -59,10 +59,12 @@ public class FinalizeFileTasklet implements Tasklet {
         }
 
         if (definition.mode() == FileDefinition.LoadMode.UPSERT) {
+            // Every active row not loaded by this execution: its key was not in this file.
             int deactivated = em.createQuery("update " + entity + " e set e.active = false, e.updatedAt = :now"
-                            + " where e.periode <> :periode and e.active = true")
+                            + " where e.active = true"
+                            + " and (e.loadExecutionId is null or e.loadExecutionId <> :executionId)")
                     .setParameter("now", LocalDateTime.now())
-                    .setParameter("periode", periode)
+                    .setParameter("executionId", stepExecution.getJobExecutionId())
                     .executeUpdate();
             stepExecution.getExecutionContext().putLong(DEACTIVATED, deactivated);
             log.info("{}: {} rows of period {} in table, {} rows set inactive", fileName, rows, period, deactivated);

@@ -4,7 +4,6 @@ import org.springframework.batch.infrastructure.item.file.transform.FieldSet;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
 import java.util.function.Function;
 
 /**
@@ -16,12 +15,12 @@ public final class Row {
 
     private final FieldSet fieldSet;
     private final int lineNumber;
-    private final DateTimeFormatter dateFormatter;
+    private final CrosDateParser dateParser;
 
-    Row(FieldSet fieldSet, int lineNumber, DateTimeFormatter dateFormatter) {
+    Row(FieldSet fieldSet, int lineNumber, CrosDateParser dateParser) {
         this.fieldSet = fieldSet;
         this.lineNumber = lineNumber;
-        this.dateFormatter = dateFormatter;
+        this.dateParser = dateParser;
     }
 
     static Row blank(int lineNumber) {
@@ -30,6 +29,11 @@ public final class Row {
 
     public boolean isBlank() {
         return fieldSet == null;
+    }
+
+    /** True when the file header has this column. */
+    public boolean has(String column) {
+        return java.util.Arrays.asList(fieldSet.getNames()).contains(column);
     }
 
     public int getLineNumber() {
@@ -58,7 +62,7 @@ public final class Row {
 
     public LocalDate date(String column) {
         String v = str(column);
-        return v == null ? null : parse(column, v, s -> LocalDate.parse(s, dateFormatter));
+        return v == null ? null : parse(column, v, dateParser::parse);
     }
 
     private static <T> T parse(String column, String value, Function<String, T> parser) {

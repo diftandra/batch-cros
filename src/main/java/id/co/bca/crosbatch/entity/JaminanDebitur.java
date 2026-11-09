@@ -14,7 +14,7 @@ import java.time.LocalDate;
 @Setter
 @Entity
 @Table(name = "cros_jaminan_debitur", indexes = {
-        @Index(name = "idx_cros_jaminan_debitur_key", columnList = "cust_ln_curr_key"),
+        @Index(name = "idx_cros_jaminan_debitur_bkey", columnList = "cust_ln_curr_key, coll_curr_key"),
         @Index(name = "idx_cros_jaminan_debitur_active", columnList = "is_active, periode")
 })
 public class JaminanDebitur extends ActiveCrosEntity {

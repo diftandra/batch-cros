@@ -38,13 +38,19 @@ spring:
 crosbatch:
   input-dir: ${CROSBATCH_INPUT_DIR:./data/input}
   backup-dir: ${CROSBATCH_BACKUP_DIR:./data/backup}
-  # MMyyyy, e.g. 112025. Empty = previous month of the run date.
+  # MMyyyy, e.g. 112025. Normally left empty (scheduled run): the period is then taken from TGL_DATA
+  # of the input files, or the previous month when no input file has TGL_DATA.
   period: ${CROSBATCH_PERIOD:}
   period-format: MMyyyy
-  file-name-pattern: "{prefix}_{period}.txt"
+  # Input file name. Placeholders: {prefix}, {period}. The source system delivers names without
+  # period (CROS_NPL.txt); use "{prefix}_{period}.txt" if the names ever include it.
+  file-name-pattern: ${CROSBATCH_FILE_NAME_PATTERN:{prefix}.txt}
   delimiter: "~|~"
   charset: ${CROSBATCH_CHARSET:UTF-8}
-  date-pattern: dd-MM-yy
+  # Tried in order: 30-11-25 and 25-OCT-16 (BRANCH_DIM uses month names for ACTV_DT / BRANCH_CLOSED_DT).
+  date-patterns:
+    - dd-MM-yy
+    - dd-MMM-yy
   two-digit-year-base: 1950
   batch-size: ${CROSBATCH_BATCH_SIZE:1000}
   progress-log-interval: 100000

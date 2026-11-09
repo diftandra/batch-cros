@@ -14,7 +14,8 @@ import java.time.LocalDate;
 @Setter
 @Entity
 @Table(name = "cros_master_pinjaman", indexes = {
-        @Index(name = "idx_cros_master_pinjaman_key", columnList = "cust_ln_curr_key, kode_kanwil, kode_kcu"),
+        @Index(name = "idx_cros_master_pinjaman_bkey",
+                columnList = "cust_ln_curr_key, kode_kanwil, kode_kcu, no_rekening_pinjaman, no_pinjaman"),
         @Index(name = "idx_cros_master_pinjaman_active", columnList = "is_active, periode")
 })
 public class MasterPinjaman extends ActiveCrosEntity {

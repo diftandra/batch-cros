@@ -36,6 +36,7 @@ src/main/java/id/co/bca/crosbatch
 │   ├── FinalizeFileTasklet         empty-file check, deactivate
 │   ├── BackupFileTasklet           move file to backup
 │   ├── ProgressLogListener         progress line every N rows
+│   ├── PeriodDetector              period from TGL_DATA of the input files
 │   └── CrosFileLocator             period -> file name, periode date
 ├── config/CrosBatchProperties      all settings (crosbatch.* in application.yml)
 ├── entity/                         JPA entities, one table per file, UUID id
@@ -47,17 +48,38 @@ src/main/java/id/co/bca/crosbatch
 
 | File | Mode | Composite key |
 |---|---|---|
-| CROS_MASTER_DEBITUR | UPSERT | cust_ln_curr_key, kategori_debitur, kode_kanwil, kode_kcu |
-| CROS_MASTER_PINJAMAN | UPSERT | cust_ln_curr_key, kode_kanwil, kode_kcu |
-| CROS_MASTER_KOMITMEN | UPSERT | cust_ln_curr_key, kode_kanwil, kode_kcu |
-| CROS_JAMINAN_DEBITUR | UPSERT | cust_ln_curr_key |
+| CROS_MASTER_DEBITUR | UPSERT | cust_ln_curr_key, kategori_debitur, kode_kanwil, kode_kcu, kategori_kredit |
+| CROS_MASTER_PINJAMAN | UPSERT | cust_ln_curr_key, kode_kanwil, kode_kcu, no_rekening_pinjaman, no_pinjaman |
+| CROS_MASTER_KOMITMEN | UPSERT | cust_ln_curr_key, kode_kanwil, kode_kcu, no_rekening_pinjaman, no_komitmen |
+| CROS_JAMINAN_DEBITUR | UPSERT | cust_ln_curr_key, coll_curr_key |
 | CROS_NPL, CROS_PEMEGANG_SAHAM, CROS_REGION_DIM, CROS_BRANCH_DIM, CROS_RELASI_JAMINAN_FASILITAS | SNAPSHOT | – |
 
+The keys were extended after checking the 112025 files; with the original keys 28,544 rows shared a key with
+another row and were merged. With these keys only 1 row in PINJAMAN and 1 in KOMITMEN is a duplicate in the source
+(logged as `duplicateKeysInFile`, last row kept).
+
 - **UPSERT**: key found -> row updated with the new values, `periode` = current period, `is_active = true`.
-  Key not found -> inserted. Then every active row whose `periode` is not the current one is set to `is_active = false`.
+  Key not found -> inserted. Then every active row that this job execution did not load (its key was not in the
+  file) is set to `is_active = false`.
 - **SNAPSHOT**: rows of the current period are deleted, then the file is inserted. Older periods are kept.
-- `periode` is the first day of the file month (`..._112025.txt` -> `2025-11-01`).
-- Dates use `dd-MM-yy`; two-digit years map to 1950–2049 (`18-06-86` -> 1986-06-18).
+- `periode` is the first day of the period month (112025 -> `2025-11-01`).
+- Dates: `dd-MM-yy` (`30-11-25`) and `dd-MMM-yy` (`25-OCT-16`, used in BRANCH_DIM); two-digit years map to
+  1950–2049 (`18-06-86` -> 1986-06-18). Configurable with `crosbatch.date-patterns`.
+
+## Input files and period
+
+The files arrive without period in the name: `CROS_MASTER_DEBITUR.txt`, `CROS_NPL.txt`, ... in the input folder
+(pattern `{prefix}.txt`, setting `CROSBATCH_FILE_NAME_PATTERN`; use `{prefix}_{period}.txt` if names include it).
+
+A scheduled run needs no parameter. The period is chosen like this:
+
+1. `--crosbatch.period=MMyyyy` / API body `{"period":"112025"}` if given. It must match TGL_DATA of the files.
+2. Otherwise from `TGL_DATA` of the input files (`30-11-25` -> 112025).
+3. Otherwise (input folder has no CROS files) the previous month, so a run after everything was loaded reports
+   the files as already processed.
+
+The run stops with an error when the files belong to different months, when a row's TGL_DATA is outside the
+period, or when the only input files have no TGL_DATA (REGION_DIM, BRANCH_DIM, NPL); then give the period explicitly.
 
 ## Rerun behaviour
 
@@ -91,7 +113,7 @@ export CROSBATCH_INPUT_DIR=/data/cros/input
 export CROSBATCH_BACKUP_DIR=/data/cros/backup
 export CROSBATCH_LOG_FILE=/data/cros/logs/crosbatch.log
 
-java -Xmx1g -jar crosbatch.jar                          # previous month
+java -Xmx1g -jar crosbatch.jar                          # period from TGL_DATA (scheduled run)
 java -Xmx1g -jar crosbatch.jar --crosbatch.period=112025  # explicit period (MMyyyy)
 ```
 
@@ -100,7 +122,8 @@ or an external file: `--spring.config.additional-location=/opt/crosbatch/applica
 
 | Property | Env var | Default |
 |---|---|---|
-| crosbatch.period | CROSBATCH_PERIOD | empty = previous month |
+| crosbatch.period | CROSBATCH_PERIOD | empty = from TGL_DATA, see "Input files and period" |
+| crosbatch.file-name-pattern | CROSBATCH_FILE_NAME_PATTERN | `{prefix}.txt` |
 | crosbatch.input-dir | CROSBATCH_INPUT_DIR | ./data/input |
 | crosbatch.backup-dir | CROSBATCH_BACKUP_DIR | ./data/backup |
 | crosbatch.charset | CROSBATCH_CHARSET | UTF-8 |
@@ -125,7 +148,7 @@ Settings in `application-api.yml`: port `CROSBATCH_API_PORT` (8080), listen addr
 
 | Method | Path | Result |
 |---|---|---|
-| POST | `/api/cros-batch/executions` body `{"period":"112025"}` (body optional = previous month) | 202 + execution, job runs in the background |
+| POST | `/api/cros-batch/executions` body `{"period":"112025"}` (body optional = period from TGL_DATA) | 202 + execution, job runs in the background |
 | GET | `/api/cros-batch/executions/{id}` | status, per-step counts, failure messages |
 | GET | `/api/cros-batch/executions?limit=20` | latest executions, newest first |
 | POST | `/api/cros-batch/executions/{id}/recover` | marks a run left STARTED by a killed process as FAILED |
@@ -171,10 +194,10 @@ detail. Details (folder paths, last execution, database type) are hidden by defa
 ## Try it with the sample files
 
 Sample files are not in the repository because they can contain customer data (`samples/` is in `.gitignore`).
-Put your own files in `samples/input`, named like `CROS_MASTER_DEBITUR_112025.txt`, with a header line and
+Put your own files in `samples/input`, named like `CROS_MASTER_DEBITUR.txt`, with a header line and
 `~|~` as the delimiter, then:
 
 ```bash
 mkdir -p data/input && cp samples/input/* data/input/
-java -jar target/crosbatch.jar --crosbatch.period=112025
+java -jar target/crosbatch.jar
 ```

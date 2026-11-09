@@ -14,8 +14,8 @@ import java.time.LocalDate;
 @Setter
 @Entity
 @Table(name = "cros_master_debitur", indexes = {
-        @Index(name = "idx_cros_master_debitur_key",
-                columnList = "cust_ln_curr_key, kategori_debitur, kode_kanwil, kode_kcu"),
+        @Index(name = "idx_cros_master_debitur_bkey",
+                columnList = "cust_ln_curr_key, kategori_debitur, kode_kanwil, kode_kcu, kategori_kredit"),
         @Index(name = "idx_cros_master_debitur_active", columnList = "is_active, periode")
 })
 public class MasterDebitur extends ActiveCrosEntity {

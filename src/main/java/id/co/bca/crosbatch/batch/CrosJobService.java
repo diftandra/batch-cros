@@ -17,6 +17,7 @@ import java.time.YearMonth;
 import java.time.format.DateTimeParseException;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -33,16 +34,18 @@ public class CrosJobService {
     private final JobOperator jobOperator;
     private final JobRepository jobRepository;
     private final Job crosMonthlyJob;
+    private final PeriodDetector periodDetector;
     /** Executions started by this JVM; they cannot be stale while this JVM is alive. */
     private final Set<Long> startedHere = ConcurrentHashMap.newKeySet();
 
     public CrosJobService(CrosBatchProperties props, CrosFileLocator locator, JobOperator jobOperator,
-                          JobRepository jobRepository, Job crosMonthlyJob) {
+                          JobRepository jobRepository, Job crosMonthlyJob, PeriodDetector periodDetector) {
         this.props = props;
         this.locator = locator;
         this.jobOperator = jobOperator;
         this.jobRepository = jobRepository;
         this.crosMonthlyJob = crosMonthlyJob;
+        this.periodDetector = periodDetector;
     }
 
     /**
@@ -55,11 +58,11 @@ public class CrosJobService {
      * @throws JobAlreadyRunningException another execution is still marked running
      */
     public synchronized JobExecution start(String requestedPeriod, boolean recoverStale) throws Exception {
-        String period = resolvePeriod(requestedPeriod);
         if (!Files.isDirectory(props.getInputDir())) {
             throw new IllegalArgumentException("input directory does not exist: "
                     + props.getInputDir().toAbsolutePath());
         }
+        String period = resolvePeriod(requestedPeriod);
 
         Set<JobExecution> running = jobRepository.findRunningJobExecutions(CrosJobConfig.JOB_NAME);
         if (!running.isEmpty()) {
@@ -125,16 +128,34 @@ public class CrosJobService {
                 .toList();
     }
 
+    /**
+     * Period to load.
+     * <ol>
+     *   <li>Given period: used, but must match TGL_DATA of the input files when they have one.</li>
+     *   <li>No period, file names without period: taken from TGL_DATA of the input files.</li>
+     *   <li>Otherwise: previous month.</li>
+     * </ol>
+     */
     private String resolvePeriod(String requested) {
+        Optional<YearMonth> detected = periodDetector.detect();
         if (requested == null || requested.isBlank()) {
-            return locator.format(YearMonth.now().minusMonths(1));
+            YearMonth period = detected.orElseGet(() -> YearMonth.now().minusMonths(1));
+            log.info("No period given, using {} ({})", locator.format(period),
+                    detected.isPresent() ? "from TGL_DATA of the input files" : "previous month");
+            return locator.format(period);
         }
+        YearMonth period;
         try {
-            return locator.format(locator.parse(requested.strip()));
+            period = locator.parse(requested.strip());
         } catch (DateTimeParseException e) {
             throw new IllegalArgumentException("period '" + requested + "' does not match format "
                     + props.getPeriodFormat());
         }
+        if (detected.isPresent() && !detected.get().equals(period)) {
+            throw new IllegalArgumentException("period " + locator.format(period)
+                    + " does not match TGL_DATA of the input files (" + locator.format(detected.get()) + ")");
+        }
+        return locator.format(period);
     }
 
     /** Another execution is still marked running. */

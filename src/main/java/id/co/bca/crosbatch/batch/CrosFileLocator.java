@@ -32,6 +32,11 @@ public class CrosFileLocator {
         return period;
     }
 
+    /** True when the file name pattern has {period}, e.g. "{prefix}_{period}.txt". */
+    public boolean fileNamesContainPeriod() {
+        return props.getFileNamePattern().contains("{period}");
+    }
+
     public String fileName(CrosBatchProperties.FileConfig file, String period) {
         return props.getFileNamePattern()
                 .replace("{prefix}", file.getPrefix())

@@ -1,6 +1,7 @@
 package id.co.bca.crosbatch.batch;
 
 import id.co.bca.crosbatch.config.CrosBatchProperties;
+import id.co.bca.crosbatch.file.CrosDateParser;
 import id.co.bca.crosbatch.file.CrosLineMapper;
 import id.co.bca.crosbatch.file.Row;
 import org.springframework.batch.core.listener.StepExecutionListener;
@@ -32,8 +33,8 @@ public class CrosFileItemReader implements ItemStreamReader<Row>, StepExecutionL
     @Override
     public void beforeStep(StepExecution stepExecution) {
         String period = CrosFileLocator.period(stepExecution);
-        CrosLineMapper lineMapper = new CrosLineMapper(props.getDelimiter(), props.getDatePattern(),
-                props.getTwoDigitYearBase());
+        CrosLineMapper lineMapper = new CrosLineMapper(props.getDelimiter(),
+                new CrosDateParser(props.getDatePatterns(), props.getTwoDigitYearBase()));
         delegate = new FlatFileItemReader<>(new FileSystemResource(locator.inputFile(fileConfig, period)), lineMapper);
         delegate.setName(fileConfig.getType() + "_reader");
         delegate.setEncoding(props.getCharset());

@@ -51,9 +51,12 @@ public class CrosBatchProperties {
     @NotBlank
     private String charset;
 
-    /** Date pattern of the date fields. "yy" is resolved with {@link #twoDigitYearBase}. */
-    @NotBlank
-    private String datePattern;
+    /**
+     * Date patterns of the date fields, tried in order. "yy" is resolved with
+     * {@link #twoDigitYearBase}; month names (MMM) are English and case-insensitive.
+     */
+    @NotEmpty
+    private List<String> datePatterns = new ArrayList<>();
 
     /** Two-digit years are mapped to [base, base + 99]. 1950 maps 86 -> 1986 and 25 -> 2025. */
     private int twoDigitYearBase;
